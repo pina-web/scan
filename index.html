@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>아르떼 · AI 계약서 스캔 변환기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f0f2f5;
+  --bg2: #e8ebef;
+  --surface: #ffffff;
+  --surface2: #f5f7fa;
+  --border: #dde1e9;
+  --border2: #c8cdd8;
+  --text: #1e293b;
+  --text2: #5a6070;
+  --text3: #94a3b8;
+  --accent: #2563eb;
+  --accent2: #7c3aed;
+  --gold: #d97706;
+  --green: #059669;
+  --green2: #047857;
+  --red: #dc2626;
+  --amber: #d97706;
+  --r: 10px;
+  --r-sm: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13px;
+}
+
+/* ── HEADER ── */
+.header {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  height: 56px;
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 14px;
+  position: sticky; top: 0; z-index: 300;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.h-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 800; letter-spacing: -.3px;
+  color: var(--text);
+}
+.h-logo .brand { color: var(--gold); }
+.h-badge {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff; font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px; letter-spacing: .5px;
+  font-family: 'DM Mono', monospace;
+}
+.h-sep { width: 1px; height: 22px; background: var(--border); }
+.h-sub { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; letter-spacing: .5px; }
+.h-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.h-btn {
+  padding: 7px 14px; border-radius: var(--r-sm);
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  border: none; font-family: 'Noto Sans KR', sans-serif;
+  transition: all .15s; display: flex; align-items: center; gap: 5px;
+}
+.h-btn.gold { background: var(--gold); color: #fff; }
+.h-btn.gold:hover { background: #b45309; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(217,119,6,.25); }
+.h-btn.dim { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.h-btn.dim:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+
+/* ── MAIN LAYOUT ── */
+.app {
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  min-height: calc(100vh - 56px);
+}
+
+/* ── LEFT PANEL ── */
+.left {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* UPLOAD ZONE */
+.upload-zone {
+  margin: 16px;
+  border: 2px dashed var(--border2);
+  border-radius: 12px;
+  background: var(--surface2);
+  padding: 24px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  flex-shrink: 0;
+}
+.upload-zone:hover, .upload-zone.drag {
+  border-color: var(--accent);
+  background: #eff6ff;
+}
+.upload-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.uz-icon { font-size: 32px; margin-bottom: 8px; line-height: 1; }
+.uz-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.uz-sub { font-size: 11px; color: var(--text3); }
+.uz-formats { margin-top: 8px; display: flex; justify-content: center; gap: 6px; }
+.uz-fmt { font-size: 9px; padding: 2px 7px; border-radius: 20px; background: var(--surface); color: var(--text3); font-family: 'DM Mono', monospace; border: 1px solid var(--border); }
+
+/* IMAGE PREVIEW */
+.img-preview {
+  margin: 0 16px 12px;
+  border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  position: relative;
+  display: none;
+  flex-shrink: 0;
+  max-height: 280px;
+}
+.img-preview img { width: 100%; object-fit: contain; max-height: 280px; display: block; }
+.img-overlay {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,.75);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+  opacity: 0; transition: opacity .2s;
+}
+.img-preview:hover .img-overlay { opacity: 1; }
+.img-reupload {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 8px;
+  padding: 8px 14px; cursor: pointer; font-size: 12px;
+  font-family: 'Noto Sans KR', sans-serif; font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+
+/* AI SCAN BUTTON */
+.scan-section {
+  margin: 0 16px;
+  flex-shrink: 0;
+}
+.scan-btn {
+  width: 100%; padding: 13px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 800; cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif;
+  transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 4px 20px rgba(79,140,255,.25);
+}
+.scan-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(79,140,255,.4); }
+.scan-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* SCAN STATUS */
+.scan-status {
+  margin: 10px 16px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  display: none;
+  align-items: center; gap: 10px;
+}
+.scan-status.scanning {
+  display: flex; background: #eff6ff; border: 1px solid #bfdbfe; color: var(--accent);
+}
+.scan-status.done {
+  display: flex; background: #ecfdf5; border: 1px solid #a7f3d0; color: var(--green);
+}
+.scan-status.error {
+  display: flex; background: #fef2f2; border: 1px solid #fecaca; color: var(--red);
+}
+.spinner {
+  width: 16px; height: 16px; border: 2px solid #bfdbfe;
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.scan-progress { flex: 1; font-weight: 600; }
+
+/* SCROLLABLE FIELDS AREA */
+.fields-scroll {
+  flex: 1; overflow-y: auto;
+  padding: 14px 16px 20px;
+  background: var(--surface);
+}
+
+/* SECTION HEADER */
+.sec {
+  margin-bottom: 14px;
+}
+.sec-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+.sec-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sec-title { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+.sec-badge { font-size: 9px; padding: 1px 7px; border-radius: 20px; font-family: 'DM Mono', monospace; font-weight: 600; margin-left: auto; }
+
+/* FIELD GRID */
+.fg { display: grid; gap: 8px; }
+.fg-2 { grid-template-columns: 1fr 1fr; }
+.fg-3 { grid-template-columns: 1fr 1fr 1fr; }
+.fg-span2 { grid-column: span 2; }
+.fg-span3 { grid-column: span 3; }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-size: 10px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.field input, .field select, .field textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+  font-size: 12px; color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  outline: none; width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+  background: #fff;
+}
+.field select option { background: #fff; }
+.field textarea { resize: vertical; min-height: 52px; font-size: 11px; line-height: 1.6; }
+.field input.ai-filled { border-color: #93c5fd; background: #eff6ff; }
+.field input.ai-filled:focus { border-color: var(--accent); }
+
+/* 카드 결제 섹션 */
+.card-entries { display: flex; flex-direction: column; gap: 6px; }
+.card-entry {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 100px 28px;
+  gap: 6px;
+  align-items: center;
+  transition: border-color .15s;
+}
+.card-entry:hover { border-color: var(--border2); }
+.card-entry.ai-filled { border-color: #93c5fd; background: #eff6ff; }
+.ce-input {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 11px; color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  outline: none; width: 100%;
+  transition: border-color .15s;
+}
+.ce-input:focus { border-color: var(--accent); }
+.ce-del {
+  width: 26px; height: 26px;
+  background: none; border: 1px solid var(--border);
+  border-radius: 5px; cursor: pointer; color: var(--text3);
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.ce-del:hover { border-color: var(--red); color: var(--red); background: #fef2f2; }
+.add-card-btn {
+  width: 100%; padding: 7px;
+  background: var(--surface2); border: 1px dashed var(--border2);
+  border-radius: 7px; color: var(--text3); font-size: 11px;
+  cursor: pointer; transition: all .15s;
+  font-family: 'Noto Sans KR', sans-serif; margin-top: 2px;
+}
+.add-card-btn:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+
+/* 품목 리스트 */
+.item-list { display: flex; flex-direction: column; gap: 5px; }
+.item-row {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 1fr 90px 90px 28px;
+  gap: 6px;
+  align-items: center;
+  transition: border-color .15s;
+}
+.item-row:hover { border-color: var(--border2); }
+.item-row.ai-filled { border-color: #93c5fd; background: #eff6ff; }
+.ir-input {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 11px; color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  outline: none; width: 100%;
+}
+.ir-input:focus { border-color: var(--accent); }
+.ir-input.amount {
+  text-align: right;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.ir-del {
+  width: 26px; height: 26px;
+  background: none; border: 1px solid var(--border);
+  border-radius: 5px; cursor: pointer; color: var(--text3);
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.ir-del:hover { border-color: var(--red); color: var(--red); background: #fef2f2; }
+.add-item-btn {
+  width: 100%; padding: 7px;
+  background: var(--surface2); border: 1px dashed var(--border2);
+  border-radius: 7px; color: var(--text3); font-size: 11px;
+  cursor: pointer; transition: all .15s;
+  font-family: 'Noto Sans KR', sans-serif; margin-top: 2px;
+}
+.add-item-btn:hover { border-color: var(--green); color: var(--green); background: #ecfdf5; }
+
+/* ── RIGHT: 출력 미리보기 ── */
+.right {
+  background: var(--bg);
+  overflow-y: auto;
+  height: calc(100vh - 56px);
+  padding: 20px;
+}
+
+.preview-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
+}
+.pt-title { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; letter-spacing: 1px; flex: 1; }
+.pt-btn {
+  padding: 6px 13px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--border2); font-family: 'Noto Sans KR', sans-serif;
+  transition: all .15s; background: var(--surface); color: var(--text2);
+}
+.pt-btn:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+.pt-btn.green { background: #ecfdf5; border-color: #6ee7b7; color: var(--green); }
+.pt-btn.green:hover { background: #d1fae5; }
+.pt-btn.blue { background: #eff6ff; border-color: #93c5fd; color: var(--accent); }
+
+/* 견적서 출력 */
+.output-doc {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5);
+  font-family: 'Noto Sans KR', sans-serif;
+  color: #1e293b;
+  animation: fadeUp .25s ease;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+/* 견적서 내부 스타일 */
+.doc-header {
+  background: linear-gradient(135deg, #0f172a, #1e3a5f);
+  color: #fff; padding: 20px 28px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.doc-co { font-size: 17px; font-weight: 900; letter-spacing: -.5px; }
+.doc-co-sub { font-size: 10px; opacity: .5; margin-top: 2px; font-family: 'DM Mono', monospace; }
+.doc-meta { text-align: right; font-size: 10px; opacity: .6; font-family: 'DM Mono', monospace; line-height: 1.9; }
+
+.doc-info {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  border-bottom: 1px solid #e2e8f0;
+}
+.dic { padding: 8px 12px; border-right: 1px solid #e2e8f0; }
+.dic:last-child { border-right: none; }
+.dic.span2 { grid-column: span 2; }
+.dic.span3 { grid-column: span 3; }
+.dic-l { font-size: 8.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px; }
+.dic-v { font-size: 11.5px; font-weight: 700; }
+
+.doc-pay {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: #f8fafc; border-bottom: 2px solid #1e293b;
+}
+.dpc { padding: 8px 12px; border-right: 1px solid #e2e8f0; }
+.dpc:last-child { border-right: none; }
+.dpc-l { font-size: 8.5px; color: #94a3b8; margin-bottom: 2px; }
+.dpc-v { font-size: 14px; font-weight: 900; color: #1e40af; font-family: 'DM Mono', monospace; }
+.dpc-v.sm { font-size: 11px; }
+.dpc-v.red { color: #dc2626; }
+
+/* 카드 결제 테이블 */
+.card-table-wrap {
+  border-top: 1px solid #e2e8f0;
+  background: #fffbeb;
+}
+.card-table-head {
+  padding: 6px 14px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px; font-weight: 800;
+  display: flex; align-items: center; gap: 6px;
+}
+.card-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.card-table th { padding: 5px 10px; background: #fef3c7; color: #78350f; font-size: 9px; font-weight: 700; text-align: left; border-bottom: 1px solid #fcd34d; }
+.card-table td { padding: 5px 10px; border-bottom: 1px solid #fef3c7; color: #1c1917; }
+.card-table td.r { text-align: right; font-family: 'DM Mono', monospace; font-weight: 700; }
+.card-table tfoot td { background: #fef3c7; font-weight: 700; }
+
+/* 품목 테이블 */
+.doc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.doc-table thead tr { background: #1e293b; color: #fff; }
+.doc-table th { padding: 6px 10px; text-align: left; font-size: 9px; font-weight: 600; letter-spacing: .5px; }
+.doc-table tbody tr { border-bottom: 1px solid #f1f5f9; }
+.doc-table tbody tr:nth-child(even) { background: #f8fafc; }
+.doc-table td { padding: 7px 10px; color: #334155; }
+.doc-table td.r { text-align: right; font-family: 'DM Mono', monospace; font-weight: 700; color: #1e40af; }
+.doc-table td.r.neg { color: #dc2626; }
+
+.doc-memo { padding: 7px 14px; background: #fef9c3; font-size: 10px; color: #92400e; border-top: 1px solid #fde68a; }
+
+.doc-total {
+  background: #0f172a; color: #fff;
+  padding: 12px 18px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.doc-t-label { font-size: 11px; opacity: .5; }
+.doc-t-val { font-size: 22px; font-weight: 900; color: #fbbf24; font-family: 'DM Mono', monospace; letter-spacing: -1px; }
+
+/* 특이사항 / 면책 */
+.doc-notice {
+  padding: 10px 14px;
+  background: #f0f4ff;
+  border-top: 1px solid #bfdbfe;
+  font-size: 9.5px; color: #1e40af; line-height: 1.7;
+}
+
+/* EMPTY STATE */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 500px; gap: 14px; color: var(--text3);
+}
+.es-icon { font-size: 56px; opacity: .3; }
+.es-title { font-size: 15px; color: var(--text2); font-weight: 600; }
+.es-sub { font-size: 12px; text-align: center; line-height: 1.7; }
+
+/* LOADING OVERLAY */
+.loading-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(15,23,42,.55);
+  flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #fff;
+}
+.loading-overlay.show { display: flex; }
+.lo-spinner { width: 52px; height: 52px; border: 4px solid rgba(255,255,255,.2); border-top-color: #fbbf24; border-radius: 50%; animation: spin .8s linear infinite; }
+.lo-text { font-size: 14px; font-weight: 700; }
+.lo-sub { font-size: 11px; color: rgba(255,255,255,.6); }
+
+/* AI LABEL */
+.ai-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; padding: 1px 6px; border-radius: 20px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe; color: var(--accent);
+  font-family: 'DM Mono', monospace; font-weight: 700; margin-left: 6px;
+}
+.ai-pulse { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* 히든 출력용 */
+.print-hidden { position: fixed; left: -9999px; top: 0; width: 860px; background: #fff; z-index: -1; }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="lo-spinner"></div>
+  <div class="lo-text" id="loText">처리 중...</div>
+  <div class="lo-sub" id="loSub"></div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="h-logo">
+    <span>아르떼</span><span class="brand">(LUCETE)</span>
+    <span class="h-badge">✦ AI 스캔 변환</span>
+  </div>
+  <div class="h-sep"></div>
+  <div class="h-sub">수기 계약서 이미지 → 디지털 견적서</div>
+  <div class="h-right">
+    <button class="h-btn dim" onclick="resetAll()">↺ 초기화</button>
+    <button class="h-btn dim" onclick="exportPNG()">🖼 PNG</button>
+    <button class="h-btn dim" onclick="exportPDF()">📄 PDF</button>
+    <button class="h-btn gold" onclick="exportFull()">📦 합본 PDF</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ══ LEFT: 입력 패널 ══ -->
+  <div class="left">
+
+    <!-- 이미지 업로드 -->
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept="image/*,.pdf" onchange="handleFile(event)">
+      <div class="uz-icon">📷</div>
+      <div class="uz-title">수기 계약서 이미지를 업로드하세요</div>
+      <div class="uz-sub">드래그&드롭 또는 클릭 · 사진 촬영도 가능</div>
+      <div class="uz-formats">
+        <span class="uz-fmt">JPG</span>
+        <span class="uz-fmt">PNG</span>
+        <span class="uz-fmt">HEIC</span>
+        <span class="uz-fmt">PDF</span>
+      </div>
+    </div>
+
+    <!-- 이미지 미리보기 -->
+    <div class="img-preview" id="imgPreview">
+      <img id="previewImg" src="" alt="업로드된 계약서">
+      <div class="img-overlay">
+        <label class="img-reupload" for="fileInput">🔄 다른 이미지 선택</label>
+      </div>
+    </div>
+
+    <!-- AI 스캔 버튼 -->
+    <div class="scan-section">
+      <button class="scan-btn" id="scanBtn" onclick="runAIScan()" disabled>
+        <span id="scanBtnIcon">✦</span>
+        <span id="scanBtnText">이미지 업로드 후 AI 스캔 시작</span>
+      </button>
+    </div>
+
+    <!-- 스캔 상태 -->
+    <div class="scan-status" id="scanStatus">
+      <div class="spinner" id="scanSpinner"></div>
+      <div class="scan-progress" id="scanProgress"></div>
+    </div>
+
+    <!-- 편집 가능한 필드들 -->
+    <div class="fields-scroll" id="fieldsScroll">
+
+      <!-- 기본 고객 정보 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div class="sec-dot" style="background:#2563eb"></div>
+          <div class="sec-title" style="color:#2563eb">기본 정보</div>
+          <span class="ai-label"><span class="ai-pulse"></span>AI 자동 입력</span>
+        </div>
+        <div class="fg fg-3">
+          <div class="field fg-span2">
+            <label>아파트명</label>
+            <input id="f_apt" type="text" placeholder="예: 다산월드메르디앙" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>타입</label>
+            <input id="f_type" type="text" placeholder="114A" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>동</label>
+            <input id="f_dong" type="text" placeholder="109" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>호수</label>
+            <input id="f_ho" type="text" placeholder="604" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>지역</label>
+            <input id="f_region" type="text" placeholder="경기_광명" oninput="renderDoc()">
+          </div>
+        </div>
+        <div class="fg fg-2" style="margin-top:8px">
+          <div class="field">
+            <label>계약자명</label>
+            <input id="f_name" type="text" placeholder="임미정" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>연락처</label>
+            <input id="f_phone" type="text" placeholder="010-0000-0000" oninput="renderDoc()">
+          </div>
+        </div>
+        <div class="fg fg-3" style="margin-top:8px">
+          <div class="field">
+            <label>계약일</label>
+            <input id="f_date" type="text" placeholder="2026.02.08" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>입주일</label>
+            <input id="f_movein" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>1차 시공일</label>
+            <input id="f_work" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>아파트 전금완료일</label>
+            <input id="f_aptpay" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>입주예정일</label>
+            <input id="f_expected" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>사회회식일</label>
+            <input id="f_clean" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+        </div>
+        <div class="fg fg-2" style="margin-top:8px">
+          <div class="field">
+            <label>상담 실장</label>
+            <input id="f_agent" type="text" placeholder="MiruB" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>결제 수단</label>
+            <input id="f_method" type="text" placeholder="현금/이체" oninput="renderDoc()">
+          </div>
+        </div>
+      </div>
+
+      <!-- 금액 정보 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div class="sec-dot" style="background:#d97706"></div>
+          <div class="sec-title" style="color:#d97706">금액 정보</div>
+        </div>
+        <div class="fg fg-3">
+          <div class="field">
+            <label>총 금액</label>
+            <input id="f_total" type="text" placeholder="2,250,000" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>계약금</label>
+            <input id="f_deposit" type="text" placeholder="50,000" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>잔금</label>
+            <input id="f_balance" type="text" placeholder="2,920,000" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>상품권 금액</label>
+            <input id="f_gift" type="text" placeholder="2,500" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>상품권 할인</label>
+            <input id="f_giftdis" type="text" placeholder="20만(3%)" oninput="renderDoc()">
+          </div>
+          <div class="field">
+            <label>중도금</label>
+            <input id="f_mid" type="text" placeholder="—" oninput="renderDoc()">
+          </div>
+        </div>
+      </div>
+
+      <!-- 카드 결제 내역 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div class="sec-dot" style="background:#f59e0b"></div>
+          <div class="sec-title" style="color:#b45309">카드 결제 내역</div>
+          <span class="ai-label"><span class="ai-pulse"></span>영수증 자동 인식</span>
+        </div>
+        <div style="margin-bottom:6px">
+          <div class="fg fg-2" style="font-size:9px;color:var(--text3);padding:0 2px 4px;font-family:'DM Mono',monospace;letter-spacing:.5px;text-transform:uppercase">
+            <span>승인번호 / 거래일시</span>
+            <span>결제금액 / 카드사</span>
+          </div>
+        </div>
+        <div class="card-entries" id="cardEntries"></div>
+        <button class="add-card-btn" onclick="addCardEntry()">＋ 카드 결제 내역 추가</button>
+      </div>
+
+      <!-- 품목 내역 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div class="sec-dot" style="background:#059669"></div>
+          <div class="sec-title" style="color:#059669">품목 내역</div>
+          <span class="ai-label"><span class="ai-pulse"></span>AI 자동 추출</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 90px 90px 28px;gap:6px;padding:0 2px 4px;font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase">
+          <span>품명 / 규격</span><span>카테고리</span><span style="text-align:right">금액</span><span></span>
+        </div>
+        <div class="item-list" id="itemList"></div>
+        <button class="add-item-btn" onclick="addItemRow()">＋ 품목 추가</button>
+      </div>
+
+      <!-- 특이사항 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div class="sec-dot" style="background:#94a3b8"></div>
+          <div class="sec-title" style="color:#94a3b8">특이사항 / 메모</div>
+        </div>
+        <div class="field">
+          <textarea id="f_memo" placeholder="AI가 추출한 특이사항, 면책 조건, 색상 등..." oninput="renderDoc()" rows="3"></textarea>
+        </div>
+      </div>
+
+    </div><!-- /fields-scroll -->
+  </div><!-- /left -->
+
+
+  <!-- ══ RIGHT: 출력 미리보기 ══ -->
+  <div class="right" id="rightPanel">
+    <div class="preview-toolbar">
+      <span class="pt-title">📋 LIVE PREVIEW — 견적서 출력</span>
+      <button class="pt-btn" onclick="renderDoc()">🔄 새로고침</button>
+      <button class="pt-btn blue" onclick="exportPDF()">⬇ PDF</button>
+      <button class="pt-btn green" onclick="exportFull()">📦 합본</button>
+    </div>
+
+    <div id="outputArea">
+      <div class="empty-state">
+        <div class="es-icon">📷</div>
+        <div class="es-title">수기 계약서 이미지를 업로드하세요</div>
+        <div class="es-sub">이미지를 올리고 <strong>AI 스캔</strong>을 누르면<br>모든 항목이 자동으로 인식됩니다</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- 히든 출력 영역 -->
+<div class="print-hidden" id="printHidden"></div>
+
+<script>
+// ══════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════
+let uploadedFile = null;
+let uploadedBase64 = null;
+let cardEntries = [];
+let itemRows = [];
+
+// ══════════════════════════════════════
+//  파일 업로드
+// ══════════════════════════════════════
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f);
+});
+
+function handleFile(e) {
+  const f = e.target.files[0];
+  if (f) processFile(f);
+}
+
+function processFile(file) {
+  uploadedFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    uploadedBase64 = ev.result.split(',')[1];
+    const url = ev.result;
+    const prev = document.getElementById('imgPreview');
+    document.getElementById('previewImg').src = url;
+    prev.style.display = 'block';
+    document.getElementById('scanBtn').disabled = false;
+    document.getElementById('scanBtnText').textContent = '✦ AI 스캔 시작 — 모든 항목 자동 인식';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════════════
+//  AI 스캔 (Claude API)
+// ══════════════════════════════════════
+async function runAIScan() {
+  if (!uploadedBase64) return;
+
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  document.getElementById('scanBtnIcon').textContent = '⟳';
+  document.getElementById('scanBtnText').textContent = 'AI 분석 중...';
+
+  const status = document.getElementById('scanStatus');
+  status.className = 'scan-status scanning';
+  status.style.display = 'flex';
+  document.getElementById('scanProgress').textContent = 'Claude AI가 수기 계약서를 분석하고 있습니다...';
+
+  const mediaType = uploadedFile.type || 'image/jpeg';
+
+  const prompt = `이 이미지는 아르떼(LUCETE) 조명 물품 공급 견적·계약서입니다.
+이미지의 모든 수기 내용을 정밀하게 읽어서 아래 JSON 형식으로 반환하세요.
+절대 추측하지 말고, 이미지에서 실제로 읽을 수 있는 내용만 입력하세요. 읽기 어려운 항목은 빈 문자열로 두세요.
+
+{
+  "apt": "아파트명",
+  "dong": "동",
+  "ho": "호수",
+  "type": "타입(예: 114A)",
+  "region": "지역(예: 경기_광명)",
+  "clientName": "계약자 이름",
+  "phone": "연락처",
+  "agent": "상담 실장/담당자",
+  "contractDate": "계약일(예: 2026.02.08)",
+  "moveInDate": "입주일",
+  "aptPayDate": "아파트 전금완료일",
+  "expectedDate": "입주예정일",
+  "cleanDate": "사회회식일(입주청소일)",
+  "workDate": "1차 시공일",
+  "payMethod": "결제수단(예: 현금/이체)",
+  "totalAmt": "총금액(숫자만, 예: 2250000)",
+  "depositAmt": "계약금(숫자만)",
+  "balanceAmt": "잔금(숫자만)",
+  "midAmt": "중도금(숫자만, 없으면 빈 문자열)",
+  "giftCard": "상품권 금액",
+  "giftDiscount": "상품권 할인 내용",
+  "memo": "특이사항, 면책내용, 색상정보 등 계약서 하단 메모 전체",
+  "cardPayments": [
+    {
+      "approvalNo": "승인번호",
+      "date": "거래일시",
+      "amount": "결제금액(숫자만)",
+      "cardCompany": "카드사명",
+      "note": "기타 메모"
+    }
+  ],
+  "items": [
+    {
+      "name": "품명 (예: 간접A SET, 우물천정-라운드, 실링팬-루씨에어 등)",
+      "spec": "규격/옵션 상세내용",
+      "category": "분류 (조명SET/우물천정/실링팬/도배/간접조명단품/유선스위치/할인 중 하나)",
+      "amount": 금액(숫자, 할인은 음수)
+    }
+  ]
+}
+
+카드 결제 내역은 이미지 우측 상단 영수증 부분에서 읽어주세요. 승인번호, 거래금액, 날짜를 모두 추출하세요.
+품목은 체크(✓)되어 있거나 금액이 기입된 항목만 포함하세요. 비어있는 항목은 제외하세요.
+JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: uploadedBase64 }
+            },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const raw = data.content?.map(b => b.text || '').join('');
+
+    // JSON 파싱
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('JSON 파싱 실패');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // 필드 채우기
+    fillFields(parsed);
+
+    status.className = 'scan-status done';
+    document.getElementById('scanSpinner').style.display = 'none';
+    document.getElementById('scanProgress').textContent = `✓ AI 스캔 완료 — ${(parsed.items||[]).length}개 품목, ${(parsed.cardPayments||[]).length}건 카드 결제 인식됨`;
+
+    renderDoc();
+
+  } catch (err) {
+    status.className = 'scan-status error';
+    document.getElementById('scanSpinner').style.display = 'none';
+    document.getElementById('scanProgress').textContent = '오류: ' + err.message + ' — 항목을 직접 입력해주세요';
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  document.getElementById('scanBtnIcon').textContent = '✦';
+  document.getElementById('scanBtnText').textContent = '✦ 다시 스캔';
+}
+
+// ══════════════════════════════════════
+//  필드 채우기
+// ══════════════════════════════════════
+function fillFields(d) {
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val) { el.value = val; el.classList.add('ai-filled'); }
+  };
+
+  set('f_apt', d.apt);
+  set('f_dong', d.dong);
+  set('f_ho', d.ho);
+  set('f_type', d.type);
+  set('f_region', d.region);
+  set('f_name', d.clientName);
+  set('f_phone', d.phone);
+  set('f_agent', d.agent);
+  set('f_date', d.contractDate);
+  set('f_movein', d.moveInDate);
+  set('f_aptpay', d.aptPayDate);
+  set('f_expected', d.expectedDate);
+  set('f_clean', d.cleanDate);
+  set('f_work', d.workDate);
+  set('f_method', d.payMethod);
+  set('f_total', d.totalAmt ? fmtNum(parseInt(d.totalAmt)) : '');
+  set('f_deposit', d.depositAmt ? fmtNum(parseInt(d.depositAmt)) : '');
+  set('f_balance', d.balanceAmt ? fmtNum(parseInt(d.balanceAmt)) : '');
+  set('f_mid', d.midAmt ? fmtNum(parseInt(d.midAmt)) : '');
+  set('f_gift', d.giftCard);
+  set('f_giftdis', d.giftDiscount);
+  set('f_memo', d.memo);
+
+  // 카드 결제
+  cardEntries = [];
+  document.getElementById('cardEntries').innerHTML = '';
+  (d.cardPayments || []).forEach(c => addCardEntry(c));
+
+  // 품목
+  itemRows = [];
+  document.getElementById('itemList').innerHTML = '';
+  (d.items || []).forEach(item => addItemRow(item));
+}
+
+function fmtNum(n) {
+  if (!n || isNaN(n)) return '';
+  return n.toLocaleString('ko-KR');
+}
+
+// ══════════════════════════════════════
+//  카드 결제 행
+// ══════════════════════════════════════
+let cardIdx = 0;
+function addCardEntry(data = {}) {
+  const id = cardIdx++;
+  const entry = { id, ...data };
+  cardEntries.push(entry);
+
+  const div = document.createElement('div');
+  div.className = 'card-entry' + (data.approvalNo ? ' ai-filled' : '');
+  div.id = 'ce-' + id;
+  div.innerHTML = `
+    <div>
+      <input class="ce-input" placeholder="승인번호" value="${esc(data.approvalNo||'')}"
+        oninput="updateCard(${id},'approvalNo',this.value)">
+      <input class="ce-input" placeholder="거래일시" value="${esc(data.date||'')}" style="margin-top:4px"
+        oninput="updateCard(${id},'date',this.value)">
+    </div>
+    <div>
+      <input class="ce-input" placeholder="카드사" value="${esc(data.cardCompany||'')}"
+        oninput="updateCard(${id},'cardCompany',this.value)">
+      <input class="ce-input" placeholder="비고" value="${esc(data.note||'')}" style="margin-top:4px"
+        oninput="updateCard(${id},'note',this.value)">
+    </div>
+    <div>
+      <input class="ce-input" placeholder="금액" value="${data.amount||''}" style="text-align:right;font-family:'DM Mono',monospace"
+        oninput="updateCard(${id},'amount',this.value);renderDoc()">
+    </div>
+    <button class="ce-del" onclick="removeCard(${id})">✕</button>
+  `;
+  document.getElementById('cardEntries').appendChild(div);
+  renderDoc();
+}
+
+function updateCard(id, field, val) {
+  const entry = cardEntries.find(c => c.id === id);
+  if (entry) { entry[field] = val; renderDoc(); }
+}
+
+function removeCard(id) {
+  cardEntries = cardEntries.filter(c => c.id !== id);
+  document.getElementById('ce-' + id)?.remove();
+  renderDoc();
+}
+
+// ══════════════════════════════════════
+//  품목 행
+// ══════════════════════════════════════
+let itemIdx = 0;
+function addItemRow(data = {}) {
+  const id = itemIdx++;
+  const row = { id, ...data };
+  itemRows.push(row);
+
+  const div = document.createElement('div');
+  div.className = 'item-row' + (data.name ? ' ai-filled' : '');
+  div.id = 'ir-' + id;
+  div.innerHTML = `
+    <div>
+      <input class="ir-input" placeholder="품명" value="${esc(data.name||'')}"
+        oninput="updateItem(${id},'name',this.value)">
+      <input class="ir-input" placeholder="규격/옵션" value="${esc(data.spec||'')}" style="margin-top:4px;font-size:10px;color:#94a3b8"
+        oninput="updateItem(${id},'spec',this.value)">
+    </div>
+    <input class="ir-input" placeholder="분류" value="${esc(data.category||'')}"
+      oninput="updateItem(${id},'category',this.value)">
+    <input class="ir-input amount" placeholder="금액" value="${data.amount||''}"
+      oninput="updateItem(${id},'amount',this.value);renderDoc()">
+    <button class="ir-del" onclick="removeItem(${id})">✕</button>
+  `;
+  document.getElementById('itemList').appendChild(div);
+  renderDoc();
+}
+
+function updateItem(id, field, val) {
+  const row = itemRows.find(r => r.id === id);
+  if (row) { row[field] = val; renderDoc(); }
+}
+
+function removeItem(id) {
+  itemRows = itemRows.filter(r => r.id !== id);
+  document.getElementById('ir-' + id)?.remove();
+  renderDoc();
+}
+
+function esc(s) { return String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ══════════════════════════════════════
+//  견적서 렌더링
+// ══════════════════════════════════════
+function fv(id) { return document.getElementById(id)?.value || ''; }
+
+function renderDoc() {
+  const html = buildDocHTML();
+  document.getElementById('outputArea').innerHTML = html;
+}
+
+function buildDocHTML() {
+  const totalAmt = parseInt((fv('f_total')||'0').replace(/,/g,'')) || 0;
+
+  // 품목 행
+  const itemRowsHTML = itemRows.map((r, i) => {
+    if (!r.name && !r.amount) return '';
+    const amt = parseInt(String(r.amount||'0').replace(/,/g,'')) || 0;
+    const isNeg = amt < 0;
+    return `<tr>
+      <td style="text-align:center;color:#94a3b8;padding:6px 10px">${i+1}</td>
+      <td style="padding:6px 10px;font-size:10px;color:#64748b">${r.category||''}</td>
+      <td style="padding:6px 10px;font-size:11px;font-weight:600">${r.name||''}</td>
+      <td style="padding:6px 10px;font-size:10px;color:#64748b">${r.spec||''}</td>
+      <td class="r ${isNeg?'neg':''}" style="padding:6px 10px">${isNeg?'-':''}${Math.abs(amt).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  // 카드 결제 섹션
+  const cardTotal = cardEntries.reduce((s, c) => s + (parseInt(String(c.amount||'0').replace(/,/g,''))||0), 0);
+  const cardTableHTML = cardEntries.length > 0 ? `
+    <div class="card-table-wrap">
+      <div class="card-table-head">💳 카드 결제 내역 (${cardEntries.length}건 · 합계 ${cardTotal.toLocaleString()}원)</div>
+      <table class="card-table">
+        <thead>
+          <tr>
+            <th>승인번호</th>
+            <th>거래일시</th>
+            <th>카드사</th>
+            <th style="text-align:right">결제금액</th>
+            <th>비고</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${cardEntries.map(c => `<tr>
+            <td style="font-family:'DM Mono',monospace;font-weight:700;color:#92400e">${c.approvalNo||'—'}</td>
+            <td>${c.date||'—'}</td>
+            <td>${c.cardCompany||'—'}</td>
+            <td class="r">${parseInt(String(c.amount||'0').replace(/,/g,'')).toLocaleString()}</td>
+            <td style="color:#64748b;font-size:9px">${c.note||''}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align:right;font-weight:700;font-size:10px">합계</td>
+            <td class="r" style="font-size:12px;color:#92400e">${cardTotal.toLocaleString()}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  ` : '';
+
+  const memo = fv('f_memo');
+
+  return `<div class="output-doc">
+    <div class="doc-header">
+      <div>
+        <div class="doc-co">🏢 아르떼(LUCETE) 조명 물품 공급 견적·계약서</div>
+        <div class="doc-co-sub">ESTIMATE / 견 적 서 — AI SCAN VERSION</div>
+      </div>
+      <div class="doc-meta">
+        계약일: ${fv('f_date')||'—'}<br>
+        사업자: 729-87-02639<br>
+        TEL: 1668-1257
+      </div>
+    </div>
+
+    <div class="doc-info">
+      <div class="dic span2">
+        <div class="dic-l">아파트</div>
+        <div class="dic-v">${fv('f_region')} ${fv('f_apt')} ${fv('f_type')}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">동 / 호수</div>
+        <div class="dic-v">${fv('f_dong')||'—'}동 ${fv('f_ho')||'—'}호</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">계약자</div>
+        <div class="dic-v">${fv('f_name')||'—'}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">연락처</div>
+        <div class="dic-v">${fv('f_phone')||'—'}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">상담실장</div>
+        <div class="dic-v">${fv('f_agent')||'—'}</div>
+      </div>
+
+      <div class="dic">
+        <div class="dic-l">입주일</div>
+        <div class="dic-v" style="font-size:10px">${fv('f_movein')||'—'}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">아파트 전금완료</div>
+        <div class="dic-v" style="font-size:10px">${fv('f_aptpay')||'—'}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">입주예정일</div>
+        <div class="dic-v" style="font-size:10px">${fv('f_expected')||'—'}</div>
+      </div>
+      <div class="dic">
+        <div class="dic-l">사회회식일</div>
+        <div class="dic-v" style="font-size:10px">${fv('f_clean')||'—'}</div>
+      </div>
+      <div class="dic span2">
+        <div class="dic-l">1차 시공일</div>
+        <div class="dic-v" style="font-size:10px">${fv('f_work')||'—'}</div>
+      </div>
+    </div>
+
+    <div class="doc-pay">
+      <div class="dpc">
+        <div class="dpc-l">총 금액</div>
+        <div class="dpc-v">₩${totalAmt.toLocaleString()}</div>
+      </div>
+      <div class="dpc">
+        <div class="dpc-l">계약금 (${fv('f_method')||'—'})</div>
+        <div class="dpc-v sm">${fv('f_deposit')||'—'}</div>
+      </div>
+      <div class="dpc">
+        <div class="dpc-l">중도금</div>
+        <div class="dpc-v sm">${fv('f_mid')||'—'}</div>
+      </div>
+      <div class="dpc">
+        <div class="dpc-l">잔금</div>
+        <div class="dpc-v sm">${fv('f_balance')||'—'}</div>
+      </div>
+      ${fv('f_gift') ? `<div class="dpc" style="grid-column:span 2">
+        <div class="dpc-l">상품권</div>
+        <div class="dpc-v sm red">${fv('f_gift')} → ${fv('f_giftdis')||''}</div>
+      </div>` : ''}
+    </div>
+
+    ${cardTableHTML}
+
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th style="width:24px">NO</th>
+          <th style="width:80px">분류</th>
+          <th style="width:130px">품명</th>
+          <th>규격 / 옵션</th>
+          <th style="width:100px; text-align:right">금액(원)</th>
+        </tr>
+      </thead>
+      <tbody>${itemRowsHTML || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px;font-size:11px">품목을 스캔하거나 직접 입력하세요</td></tr>'}</tbody>
+    </table>
+
+    ${memo ? `<div class="doc-memo">✏️ <strong>특이사항:</strong> ${memo}</div>` : ''}
+
+    <div class="doc-total">
+      <span class="doc-t-label">총 견적 금액 (VAT 포함)</span>
+      <span class="doc-t-val">₩${totalAmt.toLocaleString()}</span>
+    </div>
+
+    ${cardEntries.length > 0 ? `<div class="doc-notice">
+      💳 카드 결제 확인 — 총 ${cardEntries.length}건, 합계 ${cardTotal.toLocaleString()}원이 카드로 결제되었습니다.
+      승인번호: ${cardEntries.map(c=>c.approvalNo||'—').join(' / ')}
+    </div>` : ''}
+  </div>`;
+}
+
+// ══════════════════════════════════════
+//  PDF / PNG 내보내기
+// ══════════════════════════════════════
+function showLoading(msg, sub='') {
+  document.getElementById('loadingOverlay').classList.add('show');
+  document.getElementById('loText').textContent = msg;
+  document.getElementById('loSub').textContent = sub;
+}
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+function getFilename(suffix, ext) {
+  const name = fv('f_name') || 'unknown';
+  const apt = fv('f_apt') || 'apt';
+  const dong = fv('f_dong'); const ho = fv('f_ho');
+  const date = (fv('f_date')||'').replace(/\./g,'') || new Date().toISOString().slice(0,10).replace(/-/g,'');
+  return `${date}_${apt}_${dong}동${ho}호_${name}_${suffix}.${ext}`;
+}
+
+async function captureDoc() {
+  renderDoc();
+  await new Promise(r => setTimeout(r, 150));
+  const el = document.querySelector('.output-doc');
+  if (!el) throw new Error('출력 문서가 없습니다');
+  return await html2canvas(el, { scale: 2, useCORS: true, logging: false, backgroundColor: '#fff' });
+}
+
+async function exportPDF() {
+  if (itemRows.length === 0 && !fv('f_name')) { alert('먼저 계약서를 스캔하거나 항목을 입력해주세요.'); return; }
+  showLoading('PDF 생성 중...', '잠시 기다려주세요');
+  try {
+    const canvas = await captureDoc();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const w = pdf.internal.pageSize.getWidth();
+    const h = (canvas.height / canvas.width) * w;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, Math.min(h, 297));
+    pdf.save(getFilename('견적서', 'pdf'));
+  } catch(e) { alert('PDF 오류: ' + e.message); }
+  hideLoading();
+}
+
+async function exportPNG() {
+  if (itemRows.length === 0 && !fv('f_name')) { alert('먼저 계약서를 스캔하거나 항목을 입력해주세요.'); return; }
+  showLoading('PNG 생성 중...');
+  try {
+    const canvas = await captureDoc();
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = getFilename('견적서', 'png');
+    a.click();
+  } catch(e) { alert('PNG 오류: ' + e.message); }
+  hideLoading();
+}
+
+async function exportFull() {
+  // 견적서 + 원본 이미지(있으면) 합본
+  if (itemRows.length === 0 && !fv('f_name')) { alert('먼저 계약서를 스캔하거나 항목을 입력해주세요.'); return; }
+  showLoading('합본 PDF 생성 중...', '견적서 + 카드 내역 포함');
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const w = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    const canvas1 = await captureDoc();
+    const h1 = (canvas1.height / canvas1.width) * w;
+    pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', 0, 0, w, Math.min(h1, pageH));
+
+    // 원본 이미지 페이지 추가 (있으면)
+    if (uploadedBase64 && uploadedFile?.type?.startsWith('image/')) {
+      pdf.addPage();
+      const img = new Image();
+      img.src = 'data:' + uploadedFile.type + ';base64,' + uploadedBase64;
+      await new Promise(r => { img.onload = r; });
+      const iw = img.width, ih = img.height;
+      const ratio = Math.min(w / iw, pageH / ih);
+      const dw = iw * ratio, dh = ih * ratio;
+      pdf.addImage(img, 'JPEG', (w-dw)/2, (pageH-dh)/2, dw, dh);
+    }
+
+    pdf.save(getFilename('합본', 'pdf'));
+  } catch(e) { alert('합본 PDF 오류: ' + e.message); }
+  hideLoading();
+}
+
+function resetAll() {
+  if (!confirm('모든 내용을 초기화할까요?')) return;
+  uploadedFile = null; uploadedBase64 = null;
+  cardEntries = []; itemRows = [];
+  cardIdx = 0; itemIdx = 0;
+  document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('previewImg').src = '';
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('scanBtnText').textContent = '이미지 업로드 후 AI 스캔 시작';
+  document.getElementById('scanStatus').style.display = 'none';
+  document.querySelectorAll('.fields-scroll input, .fields-scroll textarea').forEach(el => { el.value = ''; el.classList.remove('ai-filled'); });
+  document.getElementById('cardEntries').innerHTML = '';
+  document.getElementById('itemList').innerHTML = '';
+  document.getElementById('outputArea').innerHTML = `
+    <div class="empty-state">
+      <div class="es-icon">📷</div>
+      <div class="es-title">수기 계약서 이미지를 업로드하세요</div>
+      <div class="es-sub">이미지를 올리고 <strong>AI 스캔</strong>을 누르면<br>모든 항목이 자동으로 인식됩니다</div>
+    </div>`;
+  document.getElementById('fileInput').value = '';
+}
+</script>
+</body>
+</html>
